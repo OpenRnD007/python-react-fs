@@ -4,9 +4,9 @@ import { IShipment, useStore } from "../../../store"
 import { makePostApiCall } from "../../../utils/apiCall";
 
 /**
-* A custom hook that initializes the shipment listing in the application's state store.
-* It is designed to be used when the component mounts to populate the store with dummy shipment data.
-* I had specially used custom hook because in other part we had planned to used interval and updatation logic
+* This custom hook is responsible for initializing the shipment data in the store when the component mounts.
+* It fetches shipment data from an API and updates the store accordingly.
+* The hook is designed to be used in conjunction with interval-based updates and data fetching logic elsewhere in the application.
 */
 const useSetShipmentListing = (): void => {
     const fetchShipmentsApi = useStore((state: { fetchShipmentsApi: (shipments: IShipment[]) => void }) => state.fetchShipmentsApi);
@@ -15,24 +15,29 @@ const useSetShipmentListing = (): void => {
     const showLastUpdated = useStore((state) => state.showLastUpdated);
 
 
+    const getAllData = (controller: AbortController) => {
+        setFetchNewData(true)
+        makePostApiCall(import.meta.env.VITE_API_URL, {
+            'rf': showLastUpdated
+        }, controller)
+            .then(resp => {
+                if (resp) {
+                    if (resp.shipping && resp.shipping.length) {
+                        fetchShipmentsApi(resp.shipping);
+                        setShowLastUpdated(resp.version.datetime)
+                    }
+                }
+            })
+            .finally(() => {
+                setFetchNewData(false)
+            })
+    }
+
     useEffect(() => {
         const controller = new AbortController();
+        getAllData(controller)
         const intervalId = setInterval(() => {
-            setFetchNewData(true)
-            makePostApiCall(import.meta.env.VITE_API_URL, {
-                'rf': showLastUpdated
-            }, controller)
-                .then(resp => {
-                    if (resp) {
-                        if (resp.shipping && resp.shipping.length) {
-                            fetchShipmentsApi(resp.shipping);
-                            setShowLastUpdated(resp.version.datetime)
-                        }
-                    }
-                })
-                .finally(() => {
-                    setFetchNewData(false)
-                })
+            getAllData(controller)
         }, import.meta.env.VITE_SET_API_CALL_TIMEOUT)
         return () => {
             controller.abort()
